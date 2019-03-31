@@ -27,6 +27,12 @@ func TestExecutor(t *testing.T) {
 
 	c, err := tengojson.New().
 		On(".age", `string`).
+		On(".address.zip", `
+func(v) { 
+	if len(v) != 5 { 
+		return error("wrong zip code") 
+	} 
+}`).
 		Compile()
 	if !assert.NoError(t, err) {
 		return
