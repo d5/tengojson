@@ -41,49 +41,6 @@ func (b *Builder) On(path, src string) *Builder {
 	return b
 }
 
-type KeyPath []string
-
-func Key(elems ...string) KeyPath {
-	return elems
-}
-
-func examplecode() {
-	pipeline, err := New().
-		Do(`text := import("text")`).
-		On("name", `text.to_lower`).
-		On("products[0].name", `func(v) { if !v { return error("product name missing") } }`).
-		Compile()
-	if err != nil {
-		panic(err)
-	}
-
-	out, err := pipeline.Run([]byte(`{}`))
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(string(out))
-}
-
-//
-func (b *Builder) Validate(path, src string) *Builder {
-	b.processors = append(b.processors, processor{t: validator, path: path, src: src})
-	return b
-}
-
-// same as Validate(path, "export " + src)
-func (b *Builder) ValidateExpr(path, src string) *Builder {
-	return b.Validate(path, "export "+src)
-}
-
-func (b *Builder) Transform(path, src string) *Builder {
-	b.processors = append(b.processors, processor{t: transformer, path: path, src: src})
-	return b
-}
-
-func (b *Builder) TransformExpr(path, src string) *Builder {
-	return b.Transform(path, "export "+src)
-}
-
 func (b *Builder) Compile() (*Executor, error) {
 	var code bytes.Buffer
 
@@ -117,20 +74,20 @@ if !is_undefined(__val__) {
 		}
 	}
 
-	wrapper := `
-json := import("json")
+	code.WriteString(`
+__json__ := import("json")
 ` + scriptOutputVarName + ` := func() {
-	__root__ := json.parse(` + scriptInputVarName + `)
+	__root__ := __json__.parse(` + scriptInputVarName + `)
 	if is_error(__root__) { return __root__ }
 
 	__val__ := undefined
 
 ` + strings.Join(processorLoop, "\n") + `
 
-	return json.stringify(__root__)
-}()`
+	return __json__.stringify(__root__)
+}()`)
 
-	s := script.New([]byte(wrapper))
+	s := script.New(code.Bytes())
 	_ = s.Add(scriptInputVarName, "")
 	mods := stdlib.GetModuleMap(stdlib.AllModuleNames()...)
 	mods.Remove("os")
@@ -150,14 +107,17 @@ json := import("json")
 	}, nil
 }
 
+func (b *Builder) Run(input []byte) (output []byte, err error) {
+	compiled, err := b.Compile()
+	if err != nil {
+		return nil, err
+	}
+
+	return compiled.Run(input)
+}
+
 func pathToSelector(path string) string {
+	if path == "." { return ""}
+
 	return path
-}
-
-func pathClean(p string) string {
-	return p
-}
-
-func pathJoin(elems ...string) string {
-	return strings.Join(elems, ".")
 }

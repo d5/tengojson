@@ -26,13 +26,10 @@ func TestExecutor(t *testing.T) {
 `)
 
 	c, err := tengojson.New().
+		Do(`x := import("enum")`).
 		On(".age", `string`).
-		On(".address.zip", `
-func(v) { 
-	if len(v) != 5 { 
-		return error("wrong zip code") 
-	} 
-}`).
+		On(".address.zip", `func(v) { if len(v) != 5 { return error("wrong zip code") } }`).
+		On(".tags", `func(v) { if !x.all(v, x.value) { return error("invalid tag") } } `).
 		Compile()
 	if !assert.NoError(t, err) {
 		return
